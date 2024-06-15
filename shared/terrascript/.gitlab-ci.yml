@@ -1,0 +1,70 @@
+image: ardikabs/terrascript:v0.1.8
+
+stages:
+  - validate
+  - plan
+  - apply
+
+variables:
+  AWS_PROFILE: "set the AWS_PROFILE name here"
+  TF_BACKEND: "currently the available values are 'aws' and 'google'"
+  TF_BACKEND_BUCKET: "set the Terraform Backend S3/GCS Bucket name here"
+  TF_BACKEND_DYNAMODB_TABLE: "set the Terraform Backend DynamoDB table name here, if you use S3 as the backend"
+
+.scripts:
+  - &prepare |-
+    #-------------------------------------------------------------------------
+    # example for AWS, using AWS_PROFILE, set AWS_PROFILE in GitlabCI variables
+    # -------------------------------------------------------------------------
+    unset AWS_SECRET_ACCESS_KEY
+    unset AWS_ACCESS_KEY_ID
+    export AWS_METADATA_URL="http://override-ami-instance-profile"
+    mkdir -p ~/.aws
+    echo -n "$AWS_CREDENTIALS" | base64 -d > ~/.aws/credentials
+    echo -n "$AWS_CONFIG" | base64 -d > ~/.aws/config
+
+    #-------------------------------------------------------------------------
+    # example for Google, using GOOGLE_APPLICATION_CREDENTIALS, set GOOGLE_APPLICATION_CREDENTIALS in GitlabCI variables
+    #-------------------------------------------------------------------------
+    echo -n "$TF_SERVICE_ACCOUNT" | base64 -d > /tmp/sa.json
+
+before_script:
+  - *prepare
+  - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/".insteadOf ssh://git@gitlab.com/
+  - git fetch
+
+validate:
+  stage: validate
+  script:
+    - export TF_PREVIOUS_HEAD=$(git rev-parse remotes/origin/master)
+    - terrascript validate
+  except:
+    refs:
+      - master
+      - merge_requests
+
+plan:
+  stage: plan
+  script:
+    - export TF_PREVIOUS_HEAD=$(git rev-parse remotes/origin/master)
+    - terrascript plan
+  only:
+    refs:
+      - merge_requests
+  artifacts:
+    paths:
+      - .plan/
+    expire_in: 1 hrs
+
+apply:
+  stage: apply
+  script:
+    - export TF_PREVIOUS_HEAD=$(git rev-parse remotes/origin/master)
+    - terrascript apply
+  only:
+    refs:
+      - merge_requests
+  when: manual
+  allow_failure: false
+  dependencies:
+    - plan

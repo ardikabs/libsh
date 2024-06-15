@@ -1,0 +1,329 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+NC='\033[0m'
+WHITE='\033[1;97m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+LGREEN='\033[1;92m'
+ORANGE='\033[0;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+LYELLOW='\033[1;93m'
+
+ERRORS=()
+NO_COLOR=
+ERROR_CONTEXT=none
+
+RELEASE_SELECTOR="${RELEASE_SELECTOR:-platform.ardikabs.com/release}"
+ENVIRONMENT_SELECTOR="${ENVIRONMENT_SELECTOR:-platform.ardikabs.com/environment}"
+CLUSTER_SELECTOR="${CLUSTER_SELECTOR:-platform.ardikabs.com/cluster}"
+
+toolname=$(basename "${BASH_SOURCE[0]}")
+
+trap exit_handler EXIT
+
+show_help() {
+  cat <<EOF
+deployctl is a toolkit to simplify deployment with ArgoCD.
+
+Usage:
+  $toolname [options] RELEASE_NAME
+
+Available Options:
+  -e,  --environment : Define the release environment.
+  -c,  --cluster     : Define the release cluster target. It is mutually exclusive with environment, if you provide both, it will use environment anyway.
+  -i,  --image       : Specifies the release image versioning. It must provided with fully qualified image name. For example: ghcr.io/ardikabs/etc/podinfo:latest.
+  -t,  --timeout     : Specifies timeout seconds for each ArgoCD applications. A release could be consist of multiple ArgoCD applications. It defaults to 300 seconds.
+  --restart          : Specifies whether to restart the release's Pod or not.
+  -v,  --verbose     : Print script debug info
+  -nc, --no-color    : Disables colour output
+  -h,  --help        : Print this help and exit
+
+Required Environment Variables:
+  \$ARGOCD_AUTH_TOKEN    : is the ArgoCD apiKey for your ArgoCD user to be able to authenticate.
+  \$ARGOCD_SERVER        : is the address of the ArgoCD server, but without scheme (http{,s}://).
+
+Optional Environment Variables:
+  \$ARGOCD_OPTS          : is additional command-line options to pass to argocd CLI.
+  \$RELEASE_SELECTOR     : is the release selector for the ArgoCD application. It defaults to platform.ardikabs.com/release.
+  \$ENVIRONMENT_SELECTOR : is the environment selector for the ArgoCD application. It defaults to platform.ardikabs.com/environment.
+  \$CLUSTER_SELECTOR     : is the cluster selector for the ArgoCD application. It defaults to platform.ardikabs.com/cluster.
+EOF
+  exit 1
+}
+
+# shellcheck disable=SC2034
+setup_colors() {
+  # if [[ -t 2 ]] && [[ -z "${NO_COLOR-}" ]] && [[ "${TERM-}" != "dumb" ]]; then
+  # disable checking file descriptor (fd) since terrascript intended to be run on docker environment
+  if [[ -n "${NO_COLOR-}" ]]; then
+    NC=''
+    WHITE=''
+    RED=''
+    GREEN=''
+    LGREEN=''
+    ORANGE=''
+    BLUE=''
+    PURPLE=''
+    CYAN=''
+    YELLOW=''
+    LYELLOW=''
+  fi
+}
+
+msg() {
+  echo -e "$*" >&2
+}
+
+# shellcheck disable=SC2317
+die() {
+  local msg=$1
+  msg "${RED}ERROR${NC}: $msg"
+  show_help
+  return 255
+}
+
+exit_handler() {
+  RC=$?
+  trap - EXIT
+
+  case $ERROR_CONTEXT in
+  dependency)
+    for err in "${ERRORS[@]}"; do
+      msg "${YELLOW}$toolname${NC}: missing ${RED}${err##*/}${NC} command"
+    done
+    ;;
+  operation)
+    msg "${YELLOW}$toolname${NC}: some resources had unexpected operation during synchronization"
+    for err in "${ERRORS[@]}"; do
+      msg "${PURPLE}❯${NC} ${RED}${err}${NC}"
+    done
+    RC=2
+    ;;
+  esac
+
+  exit $RC
+}
+
+parse_args() {
+  local cluster
+  local env
+
+  while [[ $# -gt 0 ]]; do
+    case "${1:-}" in
+    -e | --environment)
+      if [[ -n "${2:-}" ]]; then
+        env="$2"
+        shift
+      else
+        die "'-e | --environment' cannot be empty." >&2
+      fi
+      ;;
+    -i | --image)
+      if [[ -n "${2:-}" ]]; then
+        img="$2"
+
+        if ! [[ "$img" =~ ^[[:alnum:].\/-]+\:[[:alnum:].-]+$ ]]; then
+          die "image is not a fully qualified image name"
+        fi
+
+        shift
+      else
+        die "'-i | --image' cannot be empty" >&2
+      fi
+      ;;
+    -c | --cluster)
+      if [[ -n "${2:-}" ]]; then
+        cluster="$2"
+        shift
+      else
+        die "'-c | --cluster' cannot be empty." >&2
+      fi
+      ;;
+    -t | --timeout)
+      if [[ -n "${2:-}" ]]; then
+        timeout="$2"
+
+        if ! [[ "$timeout" =~ ^[0-9]+$ ]]; then
+          die "timeout MUST be a number"
+        fi
+
+        shift
+      else
+        die "'-t | --timeout' cannot be empty." >&2
+      fi
+      ;;
+    --restart)
+      restart=1
+      ;;
+    -h | --help) show_help ;;
+    -v | --verbose) set -x ;;
+    -nc | --no-color) NO_COLOR=1 ;;
+    -?*) die "unknown option '$1'" ;;
+    *)
+      release="${1:-}"
+      ;;
+    esac
+
+    shift
+  done
+
+  if [[ -z "$release" ]]; then
+    die "RELEASE_NAME is required"
+  fi
+
+  if [[ -z "$env" ]] && [[ -z "$cluster" ]]; then
+    die "either '-e | --environment' or '-c | --cluster' must be provided"
+  fi
+
+  selector="${RELEASE_SELECTOR}=$release"
+
+  if [[ -n "$env" ]]; then
+    selector+=",${ENVIRONMENT_SELECTOR}=$env"
+  elif [[ -n "$cluster" ]]; then
+    selector+=",${CLUSTER_SELECTOR}=$cluster"
+  fi
+}
+
+print_datetime() {
+  date +"%Y-%m-%dT%H:%M:%S%z"
+}
+
+command_check() {
+  for cmd in "$@"; do
+    if type "${cmd}" >/dev/null 2>&1 || [[ -x "${cmd}" ]]; then
+      continue
+    fi
+    ERRORS+=("${cmd}")
+  done
+
+  if [ ${#ERRORS[@]} -ne 0 ]; then
+    export ERROR_CONTEXT=dependency
+    return 69
+  fi
+}
+
+is_timeout() {
+  if [[ $(($(date +%s) - starttime)) -gt $timeout ]]; then
+    info="timeout is exceeded, move on ..."
+    msg "$(print_datetime) app=$appname $info"
+    return 23
+  fi
+
+  return 0
+}
+
+main() {
+  local release
+  local img
+  local timeout=300
+  local selector
+  local restart
+  local stderrout
+
+  stderrout=$(mktemp)
+
+  command_check jq argocd
+
+  parse_args "$@"
+  setup_colors
+
+  while read -r appname; do
+    appinfo="$(argocd app get "${appname}" --refresh -ojson 2>"${stderrout}" || true)"
+
+    if [[ -s "${stderrout}" ]]; then
+      # Read and print the error
+      msg "$(cat "${stderrout}")"
+
+      # Truncate the error file
+      true >"${stderrout}"
+
+      # Continue to the next iteration or handle as needed
+      continue
+    fi
+
+    [[ -z "${appinfo}" ]] && die "release not found"
+
+    env=$(echo "$appinfo" | jq -r ".metadata.labels[\"${ENVIRONMENT_SELECTOR}\"]")
+    currImage=$(echo "$appinfo" | jq -r .status.summary.images[0])
+    newImage=${img:-}
+
+    msg "$(print_datetime) app=$appname timeout=$timeout starting to watch application"
+
+    if [[ -n "${newImage}" ]] && [[ "$currImage" != "$newImage" ]]; then
+      argocd app set "${appname}" --kustomize-image img="$newImage"
+
+      info="rollout to newer image version"
+      msg "$(print_datetime) app=$appname old_image=$currImage new_image=$newImage $info"
+      currImage=$newImage
+    fi
+
+    if [[ -n "${restart:-}" ]]; then
+      argocd app actions run "${appname}" restart --kind Deployment
+
+      info="application rollout in progress"
+      msg "$(print_datetime) app=$appname image=$currImage $info"
+    fi
+
+    local starttime
+    starttime=$(date +%s)
+
+    while is_timeout; do
+      argocd app sync "${appname}" --async --assumeYes --timeout "${timeout}" >/dev/null 2>&1 && break
+
+      info="another operation is already in progress, waiting ..."
+      msg "$(print_datetime) app=$appname $info"
+      sleep 1
+    done
+
+    local currApp
+    while is_timeout; do
+      currApp="$(argocd app get "${appname}" --refresh -ojson)"
+      sync=$(echo "$currApp" | jq -r .status.sync.status)
+      status=$(echo "$currApp" | jq -r .status.health.status)
+      currImage=$(echo "$currApp" | jq -r .spec.source.kustomize.images[0] | cut -d '=' -f 2)
+
+      opsState=$(echo "$currApp" | jq -r .status.operationState)
+      phaseState=$(echo "$opsState" | jq -r .phase)
+      if [[ $phaseState == "Failed" ]] || [[ $phaseState == "Error" ]]; then
+        resources=$(echo "$opsState" | jq -r '.syncResult.resources | map(select(.status != "Synced"))' | jq -c '.[]')
+
+        for resource in ${resources}; do
+          namespace=$(echo "$resource" | jq -r .namespace)
+          kind=$(echo "$resource" | jq -r .kind)
+          name=$(echo "$resource" | jq -r .name)
+          status=$(echo "$resource" | jq -r .status)
+          reason=$(echo "$resource" | jq -r .message)
+
+          msg "$(print_datetime) app=$appname name=$name kind=$kind namespace=$namespace status=$status $reason"
+
+          ERRORS+=("app=$appname resource=$namespace/$kind/$name status=$status")
+        done
+
+        ERROR_CONTEXT=operation
+        break
+      fi
+
+      if [[ $sync == "Synced" && $status == "Healthy" ]]; then
+        info="application has been successfully synced"
+        msg "$(print_datetime) app=$appname image=$currImage $info"
+        break
+      else
+        info="application sync in progress"
+        msg "$(print_datetime) app=$appname operation_phase=$phaseState status=$status image=$currImage $info"
+        sleep 0.5
+      fi
+    done
+
+  done <<<"$(argocd app list -oname -l "${selector}")"
+
+  rm -f "${stderrout}"
+}
+
+main "$@"
