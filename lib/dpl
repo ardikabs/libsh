@@ -30,7 +30,7 @@ trap exit_handler EXIT
 
 show_help() {
   cat <<EOF
-deployctl is a toolkit to simplify deployment with ArgoCD.
+$toolname is a toolkit to simplify deployment with ArgoCD.
 
 Usage:
   $toolname [options] RELEASE_NAME

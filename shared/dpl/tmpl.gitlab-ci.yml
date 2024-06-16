@@ -1,0 +1,53 @@
+image: alpine
+
+stages:
+  - deploy
+
+variables:
+  APP_NAME: echoserver
+  ARGOCD_AUTH_TOKEN: "IT SHOULD BE INJECTED THROUGH CI/CD VARIABLES"
+  ARGOCD_SERVER: "IT SHOULD BE INJECTED THROUGH CI/CD VARIABLES"
+  RELEASE_SELECTOR: "platform.ardikabs.com/release"
+  ENVIRONMENT_SELECTOR: "platform.ardikabs.com/environment"
+  CLUSTER_SELECTOR: "platform.ardikabs.com/cluster"
+
+before_script:
+  - |-
+    TEMPDIR=$(mktemp -d)
+    if ! curl -sfL "https://github.com/ardikabs/dotsh/archive/refs/tags/scripts.zip" -o "${TEMPDIR}"/scripts.zip; then
+    cat >&2 <<'EOF'
+      📎 Hey there! It looks like an error occurs when trying to download the scripts.
+
+      It is probably an issue either from GitLab or the job is completely missing or unknown.
+
+      Please contact the administrator (@ardikabs) for further details.
+
+      Exiting...
+    EOF
+    exit 1
+    fi
+
+    mkdir -p "${TEMPDIR}/scripts"
+    mkdir -p /opt/shared
+
+    unzip -qq -o "${TEMPDIR}"/scripts.zip -d "${TEMPDIR}"/scripts
+    mv "${TEMPDIR}"/scripts/lib/* /usr/local/bin/ || true
+    mv "${TEMPDIR}"/scripts/shared/* /opt/shared || true
+
+  - export IMAGE="${CI_REGISTRY}/${CI_PROJECT_NAMESPACE}/${CI_PROJECT_NAME}/${APP_NAME}"
+
+deploy-staging:
+  stage: deploy
+  script:
+    - dpl --environment staging --image "${IMAGE}:latest" --restart s-id-go-01-core-echoserver
+  only:
+    refs:
+      - main
+
+deploy-production:
+  stage: deploy
+  script:
+    - dpl --environment production --image "${IMAGE}:${CI_COMMIT_SHA}" --restart p-id-go-01-core-echoserver
+  only:
+    refs:
+      - tags

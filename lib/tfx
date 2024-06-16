@@ -8,7 +8,9 @@ set -euo pipefail
 # 69 - dependency unsatisfied
 # 77 - permission denied
 
-TERRASCRIPT_VERSION=v0.1.8
+toolname=$(basename "${BASH_SOURCE[0]}")
+toolversion=v0.1.8
+
 TERRAFORM_VERSION=${TERRAFORM_VERSION:-0.12.26}
 TF_BIN=${TF_BIN:-/usr/local/bin/terraform}
 TF_PLUGIN_CACHE_DIR=${TF_PLUGIN_CACHE_DIR:-/tmp/terraform/plugin-cache}
@@ -22,7 +24,7 @@ trap exit_handler EXIT
 # shellcheck disable=SC2034
 setup_colors() {
   # if [[ -t 2 ]] && [[ -z "${NO_COLOR-}" ]] && [[ "${TERM-}" != "dumb" ]]; then
-  # disable checking file descriptor (fd) since terrascript intended to be run on docker environment
+  # disable checking file descriptor (fd) since this script intended to be run on docker environment
   if [[ -z "${NO_COLOR-}" ]]; then
     NC='\033[0m'
     WHITE='\033[1;97m'
@@ -67,11 +69,11 @@ exit_handler() {
   case $ERROR_MARK in
   dependency)
     for e in "${ERRORS[@]}"; do
-      msg "terrascript: missing ${RED}${e##*/}${NC} command"
+      msg "${toolname}: missing ${RED}${e##*/}${NC} command"
     done
     ;;
   runtime)
-    msg "terrascript: abort, caught resources failed on terraform execution:"
+    msg "${toolname}: abort, caught resources failed on terraform execution:"
     for e in "${ERRORS[@]}"; do
       msg "${PURPLE}❯${NC} ${RED}${e}${NC}"
     done
@@ -187,7 +189,7 @@ execute() {
       TF_PLAN_DIR="${basedir}/.plan/${tfpath}"
       mkdir -p "$TF_PLAN_DIR"
 
-      # terrascript will keep running even there is error in one of terraform task
+      # it will keep running even there is error in one of terraform task
       # but resulting non-zero exit code for the whole script
       (
         export TF_PLAN_FILE="${TF_PLAN_DIR%\/}/default.tfplan"
@@ -242,7 +244,7 @@ runner() {
   validate | plan) ;;
   apply) assigner_check ;;
   *)
-    msg "terrascript: unknown terraform operation ${action}"
+    msg "${toolname}: unknown terraform operation ${action}"
     return 2
     ;;
   esac
@@ -330,19 +332,18 @@ runner() {
 # Main section
 ########################################################
 show_version() {
-  printf "Terrascript Version: %s\n" "${TERRASCRIPT_VERSION}" >&2
+  msg "${toolname} version ${YELLOW}${toolversion}${NC}"
+  msg "Terraform version ${YELLOW}${TERRAFORM_VERSION}${NC}"
 }
 
 show_figlet() {
   cat <<EOF
- _______                                _       _
-|__   __|                              (_)     | |
-   | | ___ _ __ _ __ __ _ ___  ___ _ __ _ _ __ | |_
-   | |/ _ \ '__| '__/ _\` / __|/ __| '__| | '_ \| __|
-   | |  __/ |  | | | (_| \__ \ (__| |  | | |_) | |_
-   |_|\___|_|  |_|  \__,_|___/\___|_|  |_| .__/ \__|
-                                         | |
-                                         |_|
+ _    __
+| |_ / _|_  __
+| __| |_\ \/ /
+| |_|  _|>  <
+ \__|_| /_/\_\
+
 EOF
 }
 
@@ -350,10 +351,11 @@ usage() {
   cat <<EOF
 $(show_figlet)
 
-Terrascript is a thin wrapper of Terraform that have ability to be aware with changes on a git local-repository
+is a thin wrapper script for Terraform to work with multiple directories of terraform files.
 
-Terrascript is able to discover your terraform task on your git local-repository using "git-diff" triple-dot approach,
-and check the terraform task in one of following condition:
+It uses the "git-diff" triple-dot method to identify your Terraform tasks within your local git repository.
+It then categorizes these tasks based on their status:
+
 * Added
 * Modified/Renamed
 * Deleted
@@ -365,7 +367,7 @@ Available Commands:
   validate     : do terraform validate with more power
   plan         : do terraform plan with more power
   apply        : do terraform apply with more power
-  version      : show terrascript version
+  version      : show ${toolname} version
 
 Available Options:
   -h,  --help        : Print this help and exit
@@ -380,7 +382,7 @@ Available Environment Variables:
   \$TF_BACKEND_BUCKET         : is a terraform backend bucket. (required)
   \$TF_BACKEND_PREFIX         : is a terraform backend prefix for the terraform state.
   \$TF_BACKEND_DYNAMODB_TABLE : is a terraform backend dynamodb table as terraform-lock storage.
-  \$TF_ASSIGNERS              : is a base64-encoded string that contains a list of assigners (separated by newline) that able to execute terrascript.
+  \$TF_ASSIGNERS              : is a base64-encoded string that contains a list of assigners (separated by newline) that able to execute ${toolname}.
   \$TF_PLUGIN_CACHE_DIR       : is a terraform plugin cache dir based on official docs. Default to "${TF_PLUGIN_CACHE_DIR}".
 EOF
   exit
@@ -393,15 +395,13 @@ main() {
   command_check "git"
   fetch_terraform_if_not_exist
 
-  msg "Terraform version ${YELLOW}${TERRAFORM_VERSION}${NC}"
-
   case $ARGUMENT in
   validate) runner "validate" ;;
   plan) runner "plan" ;;
   apply) runner "apply" ;;
   version) show_version ;;
   *)
-    msg "terrascript: ${YELLOW}'$ARGUMENT'${NC} is not terrascript command. See 'terrascript --help'"
+    msg "${toolname}: unknown command ${YELLOW}'$ARGUMENT'${NC}. See '${toolname} --help'"
     return 2
     ;;
   esac

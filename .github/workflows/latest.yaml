@@ -21,6 +21,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Package Scripts
+        run: |-
+          zip -r scripts.zip lib shared docs
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -31,3 +35,4 @@ jobs:
             This is the latest release, which may not be fully stable. Please use it with caution.
           draft: false
           prerelease: false
+          files: scripts.zip

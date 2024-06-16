@@ -1,4 +1,4 @@
-image: ardikabs/terrascript:v0.1.8
+image: alpine
 
 stages:
   - validate
@@ -12,6 +12,28 @@ variables:
   TF_BACKEND_DYNAMODB_TABLE: "set the Terraform Backend DynamoDB table name here, if you use S3 as the backend"
 
 .scripts:
+  - &setup |-
+    TEMPDIR=$(mktemp -d)
+    if ! curl -sfL "https://github.com/ardikabs/dotsh/archive/refs/tags/main.zip" -o "${TEMPDIR}"/scripts.zip; then
+    cat >&2 <<'EOF'
+      📎 Hey there! It looks like an error occurs when trying to download the scripts.
+
+      It is probably an issue either from GitLab or the job is completely missing or unknown.
+
+      Please contact the administrator (@ardikabs) for further details.
+
+      Exiting...
+    EOF
+    exit 1
+    fi
+
+    mkdir -p "${TEMPDIR}/scripts"
+    mkdir -p /opt/shared
+
+    unzip -qq -o "${TEMPDIR}"/scripts.zip -d "${TEMPDIR}"/scripts
+    mv "${TEMPDIR}"/scripts/lib/* /usr/local/bin/ || true
+    mv "${TEMPDIR}"/scripts/shared/* /opt/shared || true
+
   - &prepare |-
     #-------------------------------------------------------------------------
     # example for AWS, using AWS_PROFILE, set AWS_PROFILE in GitlabCI variables
@@ -29,6 +51,7 @@ variables:
     echo -n "$TF_SERVICE_ACCOUNT" | base64 -d > /tmp/sa.json
 
 before_script:
+  - *setup
   - *prepare
   - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/".insteadOf ssh://git@gitlab.com/
   - git fetch
@@ -37,7 +60,7 @@ validate:
   stage: validate
   script:
     - export TF_PREVIOUS_HEAD=$(git rev-parse remotes/origin/master)
-    - terrascript validate
+    - tfx validate
   except:
     refs:
       - master
@@ -47,7 +70,7 @@ plan:
   stage: plan
   script:
     - export TF_PREVIOUS_HEAD=$(git rev-parse remotes/origin/master)
-    - terrascript plan
+    - tfx plan
   only:
     refs:
       - merge_requests
@@ -60,7 +83,7 @@ apply:
   stage: apply
   script:
     - export TF_PREVIOUS_HEAD=$(git rev-parse remotes/origin/master)
-    - terrascript apply
+    - tfx apply
   only:
     refs:
       - merge_requests
