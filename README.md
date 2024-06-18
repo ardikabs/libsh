@@ -1,4 +1,4 @@
-# ⚒️ dosth
+# ⚒️ dotsh
 
 This repository is a collection of shell scripts designed to automate and simplify various tasks. Each script in this collection serves a unique purpose and is designed with efficiency and ease-of-use in mind.
 
