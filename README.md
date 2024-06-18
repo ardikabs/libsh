@@ -21,10 +21,10 @@ curl -s "https://raw.githubusercontent.com/ardikabs/dotsh/main/install.sh" | SCR
 
 ## Script Status
 
-| Name | Status | Documentation |
-| ----------- | ------ | ------------- |
-| `dpl` | Active | [Link](docs/dpl/README.md) |
-| `tfx` | Active | [Link](docs/tfx/README.md) |
+| Name | Status | About |Documentation |
+| ----------- | ------ | ------ | ------------- |
+| `dpl` | Active | A toolkit to simplify deployment with ArgoCD | [Link](docs/dpl/README.md) |
+| `tfx` | Active | A thin wrapper script for Terraform to work with multiple directories | [Link](docs/tfx/README.md) |
 
 ## Contributing
 
