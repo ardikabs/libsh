@@ -1,4 +1,4 @@
-name: Latest Release
+name: Latest
 
 on:
   push:
@@ -25,14 +25,15 @@ jobs:
         run: |-
           zip -r scripts.zip lib shared docs
 
-      - name: Create Release
+      - name: Create or Replace latest Tag and Release
         uses: softprops/action-gh-release@v2
         with:
           name: latest
-          tag_name: main
+          tag_name: latest
           token: ${{ secrets.GITHUB_TOKEN }}
           body: |
-            This is the latest release, which may not be fully stable. Please use it with caution.
+            This is the "latest" release, which may not be fully stable.
+            Please use it with caution.
           draft: false
-          prerelease: false
+          prerelease: true
           files: scripts.zip
