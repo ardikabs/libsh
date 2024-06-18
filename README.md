@@ -9,26 +9,7 @@ You can install the scripts by downloading them from [the release page](https://
 For example, referring to the [latest](https://github.com/ardikabs/dotsh/releases/tag/main), you can install it like below:
 
 ```bash
-TEMPDIR=$(mktemp -d)
-if ! curl -sfL "https://github.com/ardikabs/dotsh/releases/download/main/scripts.zip" -o "${TEMPDIR}"/scripts.zip; then
-cat >&2 <<'EOF'
-    📎 Hey there! It looks like an error occurs when trying to download the scripts.
-
-    It is probably an issue either from GitLab or the job is completely missing or unknown.
-
-    Please contact the administrator (@admin) for further details.
-
-    Exiting...
-EOF
-exit 1
-fi
-
-mkdir -p "${TEMPDIR}/scripts"
-mkdir -p /opt/shared
-
-unzip -qq -o "${TEMPDIR}"/scripts.zip -d "${TEMPDIR}"/scripts
-mv "${TEMPDIR}"/scripts/lib/* /usr/local/bin/ || true
-mv "${TEMPDIR}"/scripts/shared/* /opt/shared || true
+curl -s "https://raw.githubusercontent.com/ardikabs/dotsh/main/install.sh" | sudo bash
 ```
 
 ## Script Status

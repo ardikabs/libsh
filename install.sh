@@ -35,7 +35,7 @@ mkdir -p "${outdir}"
 mkdir -p "${shared_dir}"
 
 unzip -qq -o "${outfile}" -d "${outdir}"
-mv "${outdir}/lib/*" "${script_dir}" 2>/dev/null || true
-mv "${outdir}/shared/*" "${shared_dir}" 2>/dev/null || true
+mv "${outdir}"/lib/* "${script_dir}" || true
+mv "${outdir}"/shared/* "${shared_dir}" || true
 
 echo "dotsh ${version} has been installed successfully! 🎉"
