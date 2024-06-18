@@ -28,7 +28,29 @@ jobs:
         run: |-
           zip -r scripts.zip lib shared docs
 
-      - name: Create or Replace latest Tag and Release
+      # GitHub APIs take sometime to make effect, we should make sure before Recreate the Latest Release and Tag,
+      # tag and release all get deleted. So we sleep sometime after deleting tag and release to wait for it taking effect.
+
+      - name: Delete the Latest Release
+        continue-on-error: true
+        run: |
+          gh release delete latest --repo $GITHUB_REPOSITORY
+          sleep 4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository_owner }}/${{ github.event.repository.name }}
+
+      # Ignore the error when we delete the latest tag, it might not exist.
+      - name: Delete the Latest Tag
+        continue-on-error: true
+        run: |
+          gh api --method DELETE /repos/$GITHUB_REPOSITORY/git/refs/tags/latest
+          sleep 4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository_owner }}/${{ github.event.repository.name }}
+
+      - name: Recreate the Latest Tag and Release
         uses: softprops/action-gh-release@v2
         with:
           name: latest

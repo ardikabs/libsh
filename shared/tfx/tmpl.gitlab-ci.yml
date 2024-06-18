@@ -13,26 +13,9 @@ variables:
 
 .scripts:
   - &setup |-
-    TEMPDIR=$(mktemp -d)
-    if ! curl -sfL "https://github.com/ardikabs/dotsh/archive/refs/tags/main.zip" -o "${TEMPDIR}"/scripts.zip; then
-    cat >&2 <<'EOF'
-      📎 Hey there! It looks like an error occurs when trying to download the scripts.
+    echo "Setting up the environment..."
 
-      It is probably an issue either from GitLab or the job is completely missing or unknown.
-
-      Please contact the administrator (@ardikabs) for further details.
-
-      Exiting...
-    EOF
-    exit 1
-    fi
-
-    mkdir -p "${TEMPDIR}/scripts"
-    mkdir -p /opt/shared
-
-    unzip -qq -o "${TEMPDIR}"/scripts.zip -d "${TEMPDIR}"/scripts
-    mv "${TEMPDIR}"/scripts/lib/* /usr/local/bin/ || true
-    mv "${TEMPDIR}"/scripts/shared/* /opt/shared || true
+    curl -s "https://raw.githubusercontent.com/ardikabs/dotsh/main/install.sh" | bash
 
   - &prepare |-
     #-------------------------------------------------------------------------
