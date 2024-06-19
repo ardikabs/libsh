@@ -1,7 +1,7 @@
 #!/bin/bash
 
 version=${VERSION:-latest}
-download_url="https://github.com/ardikabs/dotsh/releases/download"
+download_url="https://github.com/ardikabs/libsh/releases/download"
 script_dir=${SCRIPT_DIR:-/usr/local/bin}
 shared_dir=${SHARED_DIR:-/opt/shared}
 temp=$(mktemp -d)
@@ -38,4 +38,4 @@ unzip -qq -o "${outfile}" -d "${outdir}"
 mv "${outdir}"/lib/* "${script_dir}" || true
 mv "${outdir}"/shared/* "${shared_dir}" || true
 
-echo "dotsh ${version} has been installed successfully! 🎉"
+echo "libsh ${version} has been installed successfully! 🎉"

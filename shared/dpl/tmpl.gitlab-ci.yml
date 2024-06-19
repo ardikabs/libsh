@@ -15,7 +15,7 @@ before_script:
   - |
     echo "Setting up the environment..."
 
-    curl -s "https://raw.githubusercontent.com/ardikabs/dotsh/main/install.sh" | bash
+    curl -s "https://raw.githubusercontent.com/ardikabs/libsh/main/install.sh" | bash
     export RELEASE_SELECTOR=platform.example.com/release
     export ENVIRONMENT_SELECTOR=platform.example.com/environment
     export CLUSTER_SELECTOR=platform.example.com/cluster
