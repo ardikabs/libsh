@@ -1,0 +1,6 @@
+images:
+  - name: img
+    newName: ghcr.io/ardikabs/svc/auth-service
+    newTag: dev
+generators:
+  - release.yaml

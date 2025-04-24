@@ -1,0 +1,17 @@
+apiVersion: toolkit.ardikabs.com/v1alpha1
+kind: HelmRelease
+metadata:
+  name: auth-service
+  annotations:
+    config.kubernetes.io/function: |
+      exec:
+        path: helmize
+spec:
+  chart: common-app
+  repo:
+    name: ardikabs
+    url: https://charts.ardikabs.com
+  version: 0.4.1
+  values:
+    - ../common.values.yaml
+    - values.yaml

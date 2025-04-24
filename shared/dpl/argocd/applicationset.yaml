@@ -1,0 +1,67 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: application-runtimes
+  namespace: argocd
+spec:
+  # TODO(ardika): current need to prevent resource deletion until everything stable
+  # Status: IMPLEMENTED and production-ready
+  # Some issues that might worth to take attention:
+  #   https://github.com/argoproj/argo-cd/issues/9101 (preserve manual change to each app, this is for overriding parameter such as kustomize image version)
+  #   https://github.com/argoproj/applicationset/issues/186
+  syncPolicy:
+    applicationsSync: create-delete
+    preserveResourcesOnDeletion: true
+  goTemplate: true
+  generators:
+    - matrix:
+        generators:
+          - git:
+              repoURL: "https://gitlab.ardikabs.com/manifests/application-runtimes.git"
+              revision: HEAD
+              files:
+                - path: "**/*/kustomization.yaml"
+          - git:
+              repoURL: "https://gitlab.ardikabs.com/manifests/application-runtimes.git"
+              revision: HEAD
+              files:
+                - path: "runtime.yaml"
+  template:
+    metadata:
+      name: '{{ index .path.segments 1 }}-{{ index (index .clusters ( index .path.segments (add (len .path.segments) -1))) "slug" }}'
+      labels:
+        platform.ardikabs.com/release: "{{ index .path.segments 1 }}"
+        platform.ardikabs.com/cluster: "{{ index .path.segments (add (len .path.segments) -1 ) }}"
+        platform.ardikabs.com/environment: '{{ index (index .clusters ( index .path.segments (add (len .path.segments) -1))) "environment" }}'
+      namespace: argocd
+    spec:
+      project: "{{ index .path.segments 0 }}"
+      source:
+        repoURL: https://gitlab.ardikabs.com/manifests/application-runtimes.git
+        targetRevision: HEAD
+        path: "{{ .path.path }}"
+      destination:
+        server: '{{ index (index .clusters ( index .path.segments (add (len .path.segments) -1))) "address" }}'
+        namespace: "{{ index .path.segments 0 }}"
+      syncPolicy:
+        automated: # automated sync by default retries failed attempts 5 times with following delays between attempts ( 5s, 10s, 20s, 40s, 80s ); retry controlled using `retry` field.
+          prune: true # automated sync will not delete resources when Argo CD detects the resource is no longer defined in Git, therefore if deletion is expected, this must be enabled (default to false)
+          selfHeal: true # specifies the behavior to match the exact state defined in Git, this will prevent a rollback mechanism when changes are made directly to the cluster (default to false)
+          allowEmpty: false # automated sync with prune have a protection from any automation/human errors when there are no target resources. To allow application have empty resource, this must be neabled (default to false)
+        syncOptions:
+          - Validate=true # disables resource validation (equivalent to 'kubectl apply --validate=false') ( true by default ).
+          - PrunePropagationPolicy=foreground # Supported policies are background, foreground and orphan.
+          - PruneLast=true # Allow the ability for resource pruning to happen as a final, implicit wave of a sync operation
+          - ApplyOutOfSync=true
+          - RespectIgnoreDifferences=true
+        retry:
+          limit: 5 # number of failed sync attempt retries; unlimited number of attempts if less than 0
+          backoff:
+            duration: 5s # the amount to back off. Default unit is seconds, but could also be a duration (e.g. "2m", "1h")
+            factor: 2 # a factor to multiply the base duration after each failed retry
+            maxDuration: 3m # the maximum amount of time allowed for the backoff strategy
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec/template/metadata/annotations/kubectl.kubernetes.io~1restartedAt

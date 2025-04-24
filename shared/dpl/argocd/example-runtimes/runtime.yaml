@@ -1,0 +1,20 @@
+default:
+  helm:
+    chartRepoName: ardikabs
+    chartRepoURL: https://charts.ardikabs.com
+    chartName: common-app
+    chartVersion: 0.3.1
+
+clusters:
+  development-jkt:
+    slug: d-grisse-01
+    environment: development
+    address: https://k8s-01.grisse.dev.ardikabs.com
+  production-jkt:
+    slug: p-grisse-01
+    environment: production
+    address: https://k8s-01.grisse.prd.ardikabs.com
+  production-sgp:
+    slug: p-grisse-02
+    environment: production
+    address: https://k8s-02.grisse.prd.ardikabs.com

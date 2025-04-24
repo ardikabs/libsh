@@ -1,0 +1,16 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: virtual-product
+  namespace: argocd
+spec:
+  description: Managed from https://gitlab.ardikabs.com/manifests
+  destinations:
+    - namespace: "digibank"
+      server: "*"
+    - namespace: "mobile"
+      server: "*"
+    - namespace: "billing"
+      server: "*"
+  sourceRepos:
+    - "*"
