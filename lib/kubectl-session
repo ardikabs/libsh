@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASE_CONFIG="${HOME}/.kube/config"
+SESSION_FILE="/tmp/kubeconfig-session-${PPID}"
+ACTION="${1:-}"
+
+case "$ACTION" in
+  start)
+    if [[ -f "$SESSION_FILE" ]]; then
+      echo "Session already active: $SESSION_FILE"
+      exit 0
+    fi
+
+    install -m 600 /dev/null "$SESSION_FILE"
+    [[ -f "$BASE_CONFIG" ]] && cp "$BASE_CONFIG" "$SESSION_FILE"
+    echo "Isolated kubectl session started ($SESSION_FILE)"
+    ;;
+
+  end)
+    if [[ -f "$SESSION_FILE" ]]; then
+      rm -f "$SESSION_FILE"
+      echo "Isolated kubectl session ended"
+    else
+      echo "No active session for this terminal"
+    fi
+    ;;
+
+  *)
+    echo "Usage: kubectl session [start|end]" >&2
+    exit 1
+    ;;
+esac
